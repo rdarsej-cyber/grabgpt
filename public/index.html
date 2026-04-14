@@ -1,4 +1,891 @@
 <!DOCTYPE html>
-<html><head><title>GrabGPT</title></head>
-<body><h1>GrabGPT</h1><p>Loading...</p></body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GrabGPT</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #e5e5e5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Container ─────────────────────────────── */
+    #app {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+    }
+
+    /* ── Step indicator ─────────────────────────── */
+    .steps {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 40px;
+      flex-wrap: wrap;
+      row-gap: 8px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .step-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      background: #1a1a1a;
+      color: #555;
+      border: 1px solid #2a2a2a;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+
+    .step-pill .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #333;
+      color: #777;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .step-pill.active {
+      background: #10b981;
+      color: #fff;
+      border-color: #10b981;
+    }
+
+    .step-pill.active .step-num {
+      background: rgba(0,0,0,0.25);
+      color: #fff;
+    }
+
+    .step-pill.done {
+      background: #064e35;
+      color: #10b981;
+      border-color: #10b981;
+    }
+
+    .step-pill.done .step-num {
+      background: #10b981;
+      color: #fff;
+    }
+
+    .step-connector {
+      width: 32px;
+      height: 2px;
+      background: #2a2a2a;
+      flex-shrink: 0;
+    }
+
+    /* ── Screens ────────────────────────────────── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Logo / Title ───────────────────────────── */
+    .logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo h1 {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: #f0f0f0;
+    }
+
+    .logo h1 span { color: #10b981; }
+
+    .logo p {
+      color: #888;
+      font-size: 15px;
+      margin-top: 6px;
+    }
+
+    /* ── Trust banner ───────────────────────────── */
+    .trust-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      background: #111;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: #aaa;
+    }
+
+    .trust-banner .lock-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      color: #10b981;
+    }
+
+    /* ── Form elements ──────────────────────────── */
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #ccc;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="search"],
+    textarea {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #e5e5e5;
+      font-family: inherit;
+      font-size: 14px;
+      padding: 10px 12px;
+      outline: none;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="search"]:focus,
+    textarea:focus {
+      border-color: #10b981;
+    }
+
+    textarea { font-family: ui-monospace, "SFMono-Regular", "Cascadia Code", monospace; }
+
+    .field { margin-bottom: 16px; }
+
+    /* ── Buttons ────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 22px;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .btn-primary {
+      background: #10b981;
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: #0d9668; }
+
+    .btn-secondary {
+      background: #1f1f1f;
+      color: #ccc;
+      border: 1px solid #333;
+    }
+
+    .btn-secondary:hover:not(:disabled) { background: #2a2a2a; }
+
+    .btn:disabled {
+      background: #2a2a2a;
+      color: #555;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .btn-danger {
+      background: #7f1d1d;
+      color: #fca5a5;
+      border: 1px solid #991b1b;
+    }
+
+    .btn-danger:hover:not(:disabled) { background: #991b1b; }
+
+    /* ── Status messages ────────────────────────── */
+    .status-msg {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .status-msg.visible { display: block; }
+
+    .status-msg.error {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #ef4444;
+    }
+
+    .status-msg.success {
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: #10b981;
+    }
+
+    .status-msg.info {
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.3);
+      color: #60a5fa;
+    }
+
+    /* ── Collapsible guide ──────────────────────── */
+    details {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    summary {
+      padding: 12px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      color: #ccc;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    summary::-webkit-details-marker { display: none; }
+
+    summary::before {
+      content: '▶';
+      font-size: 10px;
+      color: #555;
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+
+    details[open] summary::before { transform: rotate(90deg); }
+
+    .guide-body {
+      padding: 4px 16px 16px;
+      border-top: 1px solid #222;
+    }
+
+    .guide-body ol {
+      padding-left: 20px;
+      color: #aaa;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .guide-body ol li { margin-top: 4px; }
+    .guide-body code {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 12px;
+      font-family: ui-monospace, "SFMono-Regular", monospace;
+      color: #a78bfa;
+    }
+
+    /* ── Screen 2: Conversations ────────────────── */
+    .conv-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .conv-header input[type="search"] {
+      flex: 1;
+      min-width: 160px;
+    }
+
+    #conv-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    #selection-count {
+      font-size: 13px;
+      color: #888;
+      margin-left: 4px;
+    }
+
+    /* Format toggle */
+    .format-toggle {
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #333;
+      margin-left: auto;
+    }
+
+    .format-btn {
+      padding: 6px 12px;
+      background: #1a1a1a;
+      color: #888;
+      border: none;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .format-btn + .format-btn { border-left: 1px solid #333; }
+
+    .format-btn.active,
+    .format-btn:hover {
+      background: #10b981;
+      color: #fff;
+    }
+
+    /* Table */
+    .table-wrapper {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 450px;
+      border: 1px solid #222;
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #141414;
+      color: #888;
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid #222;
+      white-space: nowrap;
+      z-index: 1;
+    }
+
+    thead th:first-child { width: 40px; text-align: center; }
+
+    tbody tr { transition: background 0.1s; }
+    tbody tr:nth-child(even) { background: #0d0d0d; }
+    tbody tr:hover { background: #1a1a1a; }
+
+    tbody td {
+      padding: 9px 12px;
+      border-bottom: 1px solid #181818;
+      color: #ccc;
+      vertical-align: middle;
+    }
+
+    tbody td:first-child { text-align: center; }
+
+    tbody tr.failed-row td { background: rgba(239,68,68,0.07); color: #fca5a5; }
+
+    input[type="checkbox"] {
+      accent-color: #10b981;
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+    }
+
+    /* Conv progress */
+    #conv-progress {
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #888;
+    }
+
+    /* ── Screen 3: Export ───────────────────────── */
+    #export-current {
+      font-size: 13px;
+      color: #aaa;
+      margin-bottom: 12px;
+      min-height: 20px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .progress-track {
+      background: #1a1a1a;
+      border-radius: 999px;
+      height: 12px;
+      overflow: hidden;
+      margin-bottom: 8px;
+      border: 1px solid #2a2a2a;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #059669, #10b981);
+      border-radius: 999px;
+      width: 0%;
+      transition: width 0.3s ease;
+      animation: shimmer 2s infinite;
+      background-size: 200% 100%;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 200% center; }
+      100% { background-position: -200% center; }
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    #export-tally {
+      font-size: 13px;
+      color: #888;
+      margin-top: 10px;
+    }
+
+    #export-failures {
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 8px;
+      font-size: 12px;
+      color: #fca5a5;
+    }
+
+    #export-failures ul { padding-left: 18px; }
+    #export-failures li { margin-top: 4px; }
+
+    .export-actions {
+      margin-top: 20px;
+    }
+
+    /* ── Screen 4: Done ─────────────────────────── */
+    .done-card {
+      text-align: center;
+      padding: 40px 24px;
+    }
+
+    .done-card .done-icon {
+      font-size: 56px;
+      margin-bottom: 16px;
+    }
+
+    .done-card h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #10b981;
+      margin-bottom: 8px;
+    }
+
+    #done-summary {
+      color: #aaa;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    #done-format {
+      color: #666;
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+
+    .done-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    #done-failures {
+      text-align: left;
+      margin-top: 24px;
+    }
+
+    /* ── Dividers / Section headers ─────────────── */
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 10px;
+      margin-top: 24px;
+    }
+
+    /* ── Responsive ─────────────────────────────── */
+    @media (max-width: 540px) {
+      .steps { gap: 0; }
+      .step-connector { width: 16px; }
+      .step-pill { padding: 5px 10px; font-size: 12px; }
+      .logo h1 { font-size: 32px; }
+      .format-toggle { margin-left: 0; }
+      #conv-controls { flex-direction: column; align-items: flex-start; }
+      .done-actions { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Step indicator -->
+  <nav class="steps" id="step-indicator">
+    <div class="step-item">
+      <div class="step-pill active" id="step-1">
+        <span class="step-num" id="step-num-1">1</span>
+        Connect
+      </div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item">
+      <div class="step-pill" id="step-2">
+        <span class="step-num" id="step-num-2">2</span>
+        Select
+      </div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item">
+      <div class="step-pill" id="step-3">
+        <span class="step-num" id="step-num-3">3</span>
+        Export
+      </div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item">
+      <div class="step-pill" id="step-4">
+        <span class="step-num" id="step-num-4">4</span>
+        Download
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Screen 1: Connect ───────────────────────── -->
+  <div class="screen active" id="screen-1">
+
+    <div class="logo">
+      <h1>Grab<span>GPT</span></h1>
+      <p>Export your ChatGPT conversations to your machine</p>
+    </div>
+
+    <div class="trust-banner">
+      <span class="lock-icon">&#128274;</span>
+      <span>Everything runs locally. Your data never leaves your computer.</span>
+    </div>
+
+    <details>
+      <summary>How to get your auth token</summary>
+      <div class="guide-body">
+        <ol>
+          <li>Open <strong>chatgpt.com</strong> in your browser and make sure you are logged in.</li>
+          <li>Open the browser developer tools: press <code>F12</code> (Windows/Linux) or <code>Cmd+Option+I</code> (Mac), then go to the <strong>Network</strong> tab.</li>
+          <li>Refresh the page, then click any network request to <code>chatgpt.com</code>.</li>
+          <li>In the <strong>Request Headers</strong> section find <code>Authorization</code>. Copy the value starting with <code>Bearer ey...</code> — paste only the token part (after "Bearer ").</li>
+          <li>Optionally copy the full <code>Cookie</code> header value and paste it into the Cookies field below to improve reliability.</li>
+        </ol>
+      </div>
+    </details>
+
+    <div class="field">
+      <label for="token-input">Auth Token</label>
+      <textarea id="token-input" rows="3" placeholder="Paste your token here..."></textarea>
+    </div>
+
+    <div class="field">
+      <label for="cookies-input">Cookies <span style="font-weight:400;color:#555">(optional)</span></label>
+      <textarea id="cookies-input" rows="3" placeholder="Paste your cookies here (optional)..."></textarea>
+    </div>
+
+    <button class="btn btn-primary" id="connect-btn" onclick="handleConnect()">Connect</button>
+
+    <div class="status-msg" id="connect-status"></div>
+  </div>
+
+  <!-- ── Screen 2: Select ────────────────────────── -->
+  <div class="screen" id="screen-2">
+
+    <div class="conv-header">
+      <input type="search" id="conv-search" placeholder="Search conversations..." oninput="renderConversationTable()" />
+    </div>
+
+    <div id="conv-progress"></div>
+
+    <div id="conv-controls" style="display:none;">
+      <button class="btn btn-secondary" onclick="selectAll()">Select All</button>
+      <button class="btn btn-secondary" onclick="deselectAll()">Deselect All</button>
+      <span id="selection-count">0 selected</span>
+      <div class="format-toggle">
+        <button class="format-btn" data-format="markdown" onclick="setFormat(this.dataset.format)">Markdown</button>
+        <button class="format-btn" data-format="json" onclick="setFormat(this.dataset.format)">JSON</button>
+        <button class="format-btn active" data-format="both" onclick="setFormat(this.dataset.format)">Both</button>
+      </div>
+      <button class="btn btn-primary" id="export-btn" onclick="startExport()" disabled>Export Selected</button>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all-checkbox" onchange="this.checked ? selectAll() : deselectAll()" /></th>
+            <th>Title</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="conv-list">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Screen 3: Export ────────────────────────── -->
+  <div class="screen" id="screen-3">
+
+    <div id="export-current">Preparing export...</div>
+
+    <div class="progress-meta">
+      <span id="export-speed"></span>
+      <span id="export-pct">0%</span>
+    </div>
+
+    <div class="progress-track">
+      <div class="progress-fill" id="export-bar-fill"></div>
+    </div>
+
+    <div id="export-tally">0 / 0 conversations exported</div>
+
+    <div class="status-msg" id="export-status"></div>
+
+    <div id="export-failures" style="display:none;">
+      <strong>Failed conversations:</strong>
+      <ul></ul>
+    </div>
+
+    <div class="export-actions">
+      <button class="btn btn-danger" onclick="abortExport()">Stop</button>
+    </div>
+  </div>
+
+  <!-- ── Screen 4: Download ──────────────────────── -->
+  <div class="screen" id="screen-4">
+
+    <div class="done-card">
+      <div class="done-icon">&#9989;</div>
+      <h2>Export Complete</h2>
+      <p id="done-summary">0 conversations exported successfully.</p>
+      <p id="done-format"></p>
+
+      <details id="done-failures" style="display:none;">
+        <summary>Failed conversations</summary>
+        <div class="guide-body">
+          <ul id="done-failures-list"></ul>
+        </div>
+      </details>
+
+      <div class="done-actions">
+        <button class="btn btn-primary" onclick="downloadZip()">&#8659; Download ZIP</button>
+        <button class="btn btn-secondary" onclick="startOver()">Start Over</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<script>
+'use strict';
+
+// ── App state ─────────────────────────────────────────
+var state = {
+  screen: 1,
+  token: '',
+  cookies: '',
+  user: null,
+  conversations: [],
+  selected: new Set(),
+  format: 'both',
+  exporting: false,
+  exportAborted: false,
+  results: { succeeded: [], failed: [] },
+  zipBlob: null,
+};
+
+// ── showScreen(n) ─────────────────────────────────────
+function showScreen(n) {
+  state.screen = n;
+
+  // Toggle screen visibility
+  for (var i = 1; i <= 4; i++) {
+    var el = document.getElementById('screen-' + i);
+    if (el) {
+      el.classList.toggle('active', i === n);
+    }
+  }
+
+  // Update step indicator
+  for (var s = 1; s <= 4; s++) {
+    var pill = document.getElementById('step-' + s);
+    var num  = document.getElementById('step-num-' + s);
+    if (!pill || !num) continue;
+
+    pill.classList.remove('active', 'done');
+    num.textContent = s;
+
+    if (s < n) {
+      pill.classList.add('done');
+      num.textContent = '\u2713'; // checkmark
+    } else if (s === n) {
+      pill.classList.add('active');
+    }
+  }
+}
+
+// ── apiCall(path) ─────────────────────────────────────
+async function apiCall(path) {
+  var res = await fetch('/api/proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url: 'https://chatgpt.com/backend-api' + path,
+      headers: {
+        'Authorization': 'Bearer ' + state.token,
+        'Cookie': state.cookies,
+        'Content-Type': 'application/json',
+        'Accept': '*/*',
+        'Origin': 'https://chatgpt.com',
+        'Referer': 'https://chatgpt.com/',
+      },
+    }),
+  });
+  return { status: res.status, headers: res.headers, data: await res.json() };
+}
+
+// ── showStatus(id, msg, type) ─────────────────────────
+function showStatus(id, msg, type) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status-msg visible ' + (type || 'info');
+}
+
+function hideStatus(id) {
+  var el = document.getElementById(id);
+  if (el) el.className = 'status-msg';
+}
+
+// ── handleConnect() ───────────────────────────────────
+async function handleConnect() {
+  var tokenEl   = document.getElementById('token-input');
+  var cookiesEl = document.getElementById('cookies-input');
+  var btn       = document.getElementById('connect-btn');
+
+  var token   = (tokenEl.value || '').trim();
+  var cookies = (cookiesEl.value || '').trim();
+
+  if (!token) {
+    showStatus('connect-status', 'Please paste your auth token before connecting.', 'error');
+    tokenEl.focus();
+    return;
+  }
+
+  state.token   = token;
+  state.cookies = cookies;
+
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
+  hideStatus('connect-status');
+
+  try {
+    var result = await apiCall('/me');
+
+    if (result.status === 200 && result.data && (result.data.email || result.data.name)) {
+      state.user = result.data;
+      var displayName = result.data.name || result.data.email || 'User';
+      showStatus('connect-status', '\u2713 Connected as ' + escapeHtml(displayName), 'success');
+
+      setTimeout(function () {
+        showScreen(2);
+        loadConversations();
+      }, 800);
+    } else if (result.status === 401 || result.status === 403) {
+      showStatus('connect-status', 'Authentication failed. Check your token and try again.', 'error');
+    } else {
+      var msg = (result.data && result.data.error) ? result.data.error : ('Unexpected response (status ' + result.status + ')');
+      showStatus('connect-status', msg, 'error');
+    }
+  } catch (err) {
+    showStatus('connect-status', 'Network error: ' + (err.message || 'Could not reach server'), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Connect';
+  }
+}
+
+// ── Health check ──────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+  fetch('/api/health')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.ok) {
+        showStatus('connect-status', 'Warning: GrabGPT server returned an unexpected health response.', 'error');
+      }
+    })
+    .catch(function () {
+      showStatus('connect-status', 'Cannot reach GrabGPT server. Make sure "node bin/cli.js" is running.', 'error');
+    });
+});
+
+// ── Stub functions (replaced in later tasks) ──────────
+function loadConversations() {}
+function renderConversationTable() {}
+function selectAll() {}
+function deselectAll() {}
+function updateSelectionCount() {}
+function setFormat() {}
+function startExport() {}
+function abortExport() {}
+function downloadZip() {}
+function startOver() {}
+function escapeHtml(s) {
+  if (typeof s !== 'string') return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function toggleConv() {}
+</script>
+</body>
 </html>
