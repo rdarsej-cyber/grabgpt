@@ -31,4 +31,6 @@ Write-Host ""
 Write-Host "  Starting GrabGPT..." -ForegroundColor Cyan
 Write-Host ""
 
-npx grabgpt@latest
+# Use npx.cmd directly to avoid PowerShell execution policy blocking npx.ps1
+$npxCmd = Join-Path (Split-Path (Get-Command node).Source) "npx.cmd"
+& $npxCmd grabgpt@latest
