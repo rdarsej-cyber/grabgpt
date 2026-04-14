@@ -1,0 +1,27 @@
+{
+  "name": "grabgpt",
+  "version": "1.0.0",
+  "description": "Export your ChatGPT conversations. One command. Fully local.",
+  "main": "server.js",
+  "bin": {
+    "grabgpt": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "public/",
+    "server.js"
+  ],
+  "keywords": ["chatgpt", "export", "conversations", "backup", "openai"],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AceDZN/grabgpt"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
