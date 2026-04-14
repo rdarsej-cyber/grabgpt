@@ -905,7 +905,7 @@ async function loadConversations() {
 
   progressEl.textContent = 'Loading conversations...';
   progressEl.style.display = 'block';
-  controlsEl.style.display = 'none';
+  controlsEl.style.display = 'flex';
 
   var offset = 0;
   var limit  = 28;
@@ -922,8 +922,15 @@ async function loadConversations() {
       var items = (result.data && result.data.items) ? result.data.items : [];
       if (items.length === 0) break;
 
+      // Select new items by default and add to state
+      items.forEach(function (c) { state.selected.add(c.id); });
       state.conversations = state.conversations.concat(items);
-      progressEl.textContent = 'Loading conversations... ' + state.conversations.length + ' loaded';
+
+      progressEl.textContent = 'Loading conversations... ' + state.conversations.length + ' found so far';
+
+      // Render table progressively so users see results immediately
+      renderConversationTable();
+      updateSelectionCount();
 
       if (items.length < limit) break;
 
@@ -938,11 +945,8 @@ async function loadConversations() {
     // Fall through to show whatever was loaded
   }
 
-  progressEl.style.display = 'none';
-  controlsEl.style.display = 'flex';
-
-  // Select all conversations by default
-  state.conversations.forEach(function (c) { state.selected.add(c.id); });
+  progressEl.textContent = 'All ' + state.conversations.length + ' conversations loaded.';
+  setTimeout(function () { progressEl.style.display = 'none'; }, 2000);
 
   renderConversationTable();
   updateSelectionCount();
