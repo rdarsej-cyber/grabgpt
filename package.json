@@ -1,6 +1,6 @@
 {
   "name": "grabgpt",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Export your ChatGPT conversations. One command. Fully local.",
   "main": "server.js",
   "bin": {
