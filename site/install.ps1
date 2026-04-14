@@ -31,12 +31,10 @@ Write-Host ""
 Write-Host "  Starting GrabGPT..." -ForegroundColor Cyan
 Write-Host ""
 
-# Use .cmd variants to avoid PowerShell execution policy blocking .ps1 wrappers
 $nodeDir = Split-Path (Get-Command node).Source
 $npxCmd = Join-Path $nodeDir "npx.cmd"
 $npmCmd = Join-Path $nodeDir "npm.cmd"
 
-# Clear cache to ensure latest version is fetched
 & $npmCmd cache clean --force 2>$null
 
-& $npxCmd grabgpt@latest
+& $npxCmd --yes grabgpt@latest

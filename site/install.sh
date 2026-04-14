@@ -36,4 +36,4 @@ echo ""
 echo "  Starting GrabGPT..."
 echo ""
 
-npx grabgpt@latest
+npx --yes grabgpt@latest
