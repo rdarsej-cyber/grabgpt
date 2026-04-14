@@ -1206,6 +1206,33 @@ function formatAsJson(conv, messages) {
 }
 
 // ── fetchWithRetry(path, maxRetries) ─────────────────
+function countdownWait(seconds) {
+  var barFill = document.getElementById('export-bar-fill');
+  var statusEl = document.getElementById('export-status');
+  var startWidth = barFill ? barFill.style.width : '0%';
+
+  return new Promise(function (resolve) {
+    var remaining = seconds;
+    function tick() {
+      if (remaining <= 0) {
+        statusEl.textContent = 'Resuming...';
+        if (barFill) barFill.style.width = startWidth;
+        resolve();
+        return;
+      }
+      var pct = Math.round(((seconds - remaining) / seconds) * 100);
+      statusEl.textContent = 'Rate limited. Retrying in ' + remaining + 's...';
+      if (barFill) {
+        barFill.style.width = pct + '%';
+        barFill.style.backgroundColor = '#f59e0b';
+      }
+      remaining--;
+      setTimeout(tick, 1000);
+    }
+    tick();
+  });
+}
+
 async function fetchWithRetry(path, maxRetries) {
   if (maxRetries === undefined) maxRetries = 5;
 
@@ -1230,8 +1257,7 @@ async function fetchWithRetry(path, maxRetries) {
         var ra = result.headers.get('retry-after');
         if (ra) retryAfter = Math.max(5, parseInt(ra, 10));
       } catch (e) {}
-      updateExportStatus('Rate limited. Waiting ' + retryAfter + 's before retrying...');
-      await new Promise(function (r) { setTimeout(r, retryAfter * 1000); });
+      await countdownWait(retryAfter);
       continue;
     }
 
@@ -1253,7 +1279,10 @@ function updateExportProgress(current, total, title, startTime) {
   var pct = total > 0 ? Math.round((current / total) * 100) : 0;
 
   var fill = document.getElementById('export-bar-fill');
-  if (fill) fill.style.width = pct + '%';
+  if (fill) {
+    fill.style.width = pct + '%';
+    fill.style.backgroundColor = '#10b981';
+  }
 
   var pctEl = document.getElementById('export-pct');
   if (pctEl) pctEl.textContent = pct + '%';
