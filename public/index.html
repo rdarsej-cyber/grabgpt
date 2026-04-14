@@ -1054,9 +1054,296 @@ function setFormat(format) {
   });
 }
 
+// ── parseMessageTree(mapping) ─────────────────────────
+function parseMessageTree(mapping) {
+  if (!mapping) return [];
+
+  // Find root node (parent is null/undefined)
+  var rootId = null;
+  for (var id in mapping) {
+    var node = mapping[id];
+    if (!node.parent) {
+      rootId = id;
+      break;
+    }
+  }
+  if (!rootId) return [];
+
+  var messages = [];
+  var currentId = rootId;
+
+  while (currentId) {
+    var node = mapping[currentId];
+    if (!node) break;
+
+    var msg = node.message;
+    if (msg) {
+      var role = msg.author && msg.author.role;
+      if (role === 'user' || role === 'assistant') {
+        var parts = (msg.content && msg.content.parts) || [];
+        var text = parts
+          .filter(function (p) { return typeof p === 'string'; })
+          .join('\n')
+          .trim();
+        if (text) {
+          var model = (msg.metadata && msg.metadata.model_slug) || '';
+          messages.push({ role: role, text: text, model: model });
+        }
+      }
+    }
+
+    // Follow first child
+    var children = node.children || [];
+    currentId = children.length > 0 ? children[0] : null;
+  }
+
+  return messages;
+}
+
+// ── slugify(text) ─────────────────────────────────────
+function slugify(text) {
+  if (!text || typeof text !== 'string') return 'untitled';
+  var s = text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80)
+    .replace(/^-+|-+$/g, '');
+  return s || 'untitled';
+}
+
+// ── formatAsMarkdown(title, dateStr, messages) ────────
+function formatAsMarkdown(title, dateStr, messages) {
+  var models = [];
+  messages.forEach(function (m) {
+    if (m.model && models.indexOf(m.model) === -1) models.push(m.model);
+  });
+  var modelStr = models.join(', ') || 'unknown';
+
+  var lines = [
+    '# ' + title,
+    '**Date:** ' + dateStr,
+    '**Model:** ' + modelStr,
+    '',
+    '---',
+    '',
+  ];
+
+  messages.forEach(function (m) {
+    var heading = m.role === 'user' ? '## User' : '## Assistant';
+    lines.push(heading);
+    lines.push(m.text);
+    lines.push('');
+  });
+
+  return lines.join('\n');
+}
+
+// ── formatAsJson(conv, messages) ─────────────────────
+function formatAsJson(conv, messages) {
+  var models = [];
+  messages.forEach(function (m) {
+    if (m.model && models.indexOf(m.model) === -1) models.push(m.model);
+  });
+  var obj = {
+    id: conv.id,
+    title: conv.title || '(Untitled)',
+    create_time: new Date(conv.create_time * 1000).toISOString(),
+    model: models.join(', '),
+    messages: messages.map(function (m) {
+      return { role: m.role, text: m.text, model: m.model };
+    }),
+  };
+  return JSON.stringify(obj, null, 2);
+}
+
+// ── fetchWithRetry(path, maxRetries) ─────────────────
+async function fetchWithRetry(path, maxRetries) {
+  if (maxRetries === undefined) maxRetries = 5;
+
+  for (var attempt = 0; attempt <= maxRetries; attempt++) {
+    var result;
+    try {
+      result = await apiCall(path);
+    } catch (err) {
+      if (attempt >= maxRetries) throw new Error('Max retries exceeded');
+      var wait = Math.pow(2, attempt) * 1000;
+      await new Promise(function (r) { setTimeout(r, wait); });
+      continue;
+    }
+
+    if (result.status === 401 || result.status === 403) {
+      throw new Error('AUTH_EXPIRED');
+    }
+
+    if (result.status === 429) {
+      var retryAfter = 30;
+      try {
+        var ra = result.headers.get('retry-after');
+        if (ra) retryAfter = Math.max(5, parseInt(ra, 10));
+      } catch (e) {}
+      updateExportStatus('Rate limited. Waiting ' + retryAfter + 's before retrying...');
+      await new Promise(function (r) { setTimeout(r, retryAfter * 1000); });
+      continue;
+    }
+
+    if (result.status >= 200 && result.status < 300) {
+      return result.data;
+    }
+
+    // Other error — exponential backoff
+    if (attempt >= maxRetries) throw new Error('Max retries exceeded');
+    var backoff = Math.pow(2, attempt) * 1000;
+    await new Promise(function (r) { setTimeout(r, backoff); });
+  }
+
+  throw new Error('Max retries exceeded');
+}
+
+// ── updateExportProgress(current, total, title, startTime) ──
+function updateExportProgress(current, total, title, startTime) {
+  var pct = total > 0 ? Math.round((current / total) * 100) : 0;
+
+  var fill = document.getElementById('export-bar-fill');
+  if (fill) fill.style.width = pct + '%';
+
+  var pctEl = document.getElementById('export-pct');
+  if (pctEl) pctEl.textContent = pct + '%';
+
+  var currentEl = document.getElementById('export-current');
+  if (currentEl) currentEl.textContent = "Exporting " + current + " of " + total + ": '" + title + "'";
+
+  var speedEl = document.getElementById('export-speed');
+  if (speedEl && startTime && current > 0) {
+    var elapsed = (Date.now() - startTime) / 1000;
+    var speed = elapsed > 0 ? (current / elapsed).toFixed(2) : 0;
+    speedEl.textContent = speed + ' conv/s';
+  }
+}
+
+// ── updateExportTally() ───────────────────────────────
+function updateExportTally() {
+  var tallyEl = document.getElementById('export-tally');
+  if (tallyEl) {
+    var s = state.results.succeeded.length;
+    var f = state.results.failed.length;
+    tallyEl.textContent = s + ' succeeded, ' + f + ' failed';
+  }
+}
+
+// ── updateExportStatus(msg) ───────────────────────────
+function updateExportStatus(msg) {
+  var el = document.getElementById('export-status');
+  if (el) {
+    el.textContent = msg;
+    el.className = 'status-msg visible info';
+  }
+}
+
+// ── addFailedRow(title, error) ────────────────────────
+function addFailedRow(title, error) {
+  var failuresEl = document.getElementById('export-failures');
+  if (!failuresEl) return;
+  failuresEl.style.display = 'block';
+
+  var ul = failuresEl.querySelector('ul');
+  if (!ul) return;
+
+  var li = document.createElement('div');
+  li.className = 'failed-row';
+  li.textContent = escapeHtml(title) + ': ' + escapeHtml(error);
+  ul.appendChild(li);
+}
+
+// ── startExport() ─────────────────────────────────────
+async function startExport() {
+  showScreen(3);
+  state.exporting = true;
+  state.exportAborted = false;
+  state.results = { succeeded: [], failed: [] };
+
+  // Clear failure display
+  var failuresEl = document.getElementById('export-failures');
+  if (failuresEl) {
+    failuresEl.style.display = 'none';
+    var ul = failuresEl.querySelector('ul');
+    if (ul) { while (ul.firstChild) ul.removeChild(ul.firstChild); }
+  }
+  hideStatus('export-status');
+
+  var selected = state.conversations.filter(function (c) {
+    return state.selected.has(c.id);
+  });
+  var total = selected.length;
+  var startTime = Date.now();
+
+  for (var i = 0; i < selected.length; i++) {
+    if (state.exportAborted) break;
+
+    var conv = selected[i];
+    var title = conv.title || '(Untitled)';
+    updateExportProgress(i, total, title, startTime);
+
+    try {
+      var data = await fetchWithRetry('/conversation/' + conv.id);
+
+      var messages = parseMessageTree(data.mapping);
+
+      var dateObj = new Date(conv.create_time * 1000);
+      var dateStr = dateObj.toISOString().slice(0, 10);
+      var slug = dateStr + '_' + slugify(title);
+
+      var files = {};
+      if (state.format === 'markdown' || state.format === 'both') {
+        files['markdown/' + slug + '.md'] = formatAsMarkdown(title, dateStr, messages);
+      }
+      if (state.format === 'json' || state.format === 'both') {
+        files['json/' + slug + '.json'] = formatAsJson(conv, messages);
+      }
+
+      state.results.succeeded.push({ conv: conv, files: files });
+
+    } catch (err) {
+      if (err.message === 'AUTH_EXPIRED') {
+        updateExportStatus('Authentication expired. Please start over and reconnect.');
+        break;
+      }
+      state.results.failed.push({ conv: conv, error: err.message });
+      addFailedRow(title, err.message);
+    }
+
+    updateExportTally();
+
+    // Rate limit delay between requests (skip after last)
+    if (i < selected.length - 1 && !state.exportAborted) {
+      await new Promise(function (r) { setTimeout(r, 3000); });
+    }
+  }
+
+  updateExportProgress(
+    state.results.succeeded.length + state.results.failed.length,
+    total,
+    '',
+    startTime
+  );
+
+  state.exporting = false;
+  buildZip();
+  showScreen(4);
+  renderDoneScreen();
+}
+
+// ── abortExport() ─────────────────────────────────────
+function abortExport() {
+  state.exportAborted = true;
+  updateExportStatus('Stopping...');
+}
+
 // ── Stub functions (to be implemented in later tasks) ──
-function startExport() {}
-function abortExport() {}
+function buildZip() {}
+function renderDoneScreen() {}
 function downloadZip() {}
 function startOver() {}
 </script>
