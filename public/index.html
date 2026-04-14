@@ -1196,7 +1196,7 @@ function formatAsJson(conv, messages) {
   var obj = {
     id: conv.id,
     title: conv.title || '(Untitled)',
-    create_time: new Date(conv.create_time * 1000).toISOString(),
+    create_time: (function() { var t = conv.create_time || conv.update_time; if (!t) return null; var d = new Date((typeof t === 'string' ? parseFloat(t) : t) * 1000); return isNaN(d.getTime()) ? null : d.toISOString(); })(),
     model: models.join(', '),
     messages: messages.map(function (m) {
       return { role: m.role, text: m.text, model: m.model };
@@ -1366,8 +1366,10 @@ async function startExport() {
 
       var messages = parseMessageTree(data.mapping);
 
-      var dateObj = new Date(conv.create_time * 1000);
-      var dateStr = dateObj.toISOString().slice(0, 10);
+      var ts = conv.create_time || conv.update_time || (Date.now() / 1000);
+      if (typeof ts === 'string') ts = parseFloat(ts);
+      var dateObj = new Date(ts * 1000);
+      var dateStr = isNaN(dateObj.getTime()) ? new Date().toISOString().slice(0, 10) : dateObj.toISOString().slice(0, 10);
       var slug = dateStr + '_' + slugify(title);
 
       var files = {};
