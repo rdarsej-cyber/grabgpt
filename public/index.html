@@ -645,6 +645,7 @@
     </div>
 
     <div id="conv-progress"></div>
+    <button class="btn btn-secondary" id="stop-loading-btn" onclick="stopLoading()" style="display:none;">Stop Loading</button>
 
     <div id="conv-controls" style="display:none;">
       <button class="btn btn-secondary" onclick="selectAll()">Select All</button>
@@ -899,12 +900,15 @@ function escapeHtml(s) {
 async function loadConversations() {
   state.conversations = [];
   state.selected = new Set();
+  state.loadingAborted = false;
 
   var progressEl = document.getElementById('conv-progress');
   var controlsEl = document.getElementById('conv-controls');
+  var stopBtn = document.getElementById('stop-loading-btn');
 
   progressEl.textContent = 'Loading conversations...';
   progressEl.style.display = 'block';
+  stopBtn.style.display = '';
   controlsEl.style.display = 'flex';
 
   var offset = 0;
@@ -912,10 +916,13 @@ async function loadConversations() {
 
   try {
     while (true) {
+      if (state.loadingAborted) break;
+
       var result = await apiCall('/conversations?offset=' + offset + '&limit=' + limit + '&order=updated');
 
       if (result.status === 401 || result.status === 403) {
         progressEl.textContent = 'Auth expired. Please go back and reconnect.';
+        stopBtn.style.display = 'none';
         return;
       }
 
@@ -941,15 +948,26 @@ async function loadConversations() {
     }
   } catch (err) {
     progressEl.textContent = 'Error loading conversations: ' + (err.message || 'Unknown error');
-    if (state.conversations.length === 0) return;
+    if (state.conversations.length === 0) { stopBtn.style.display = 'none'; return; }
     // Fall through to show whatever was loaded
   }
 
-  progressEl.textContent = 'All ' + state.conversations.length + ' conversations loaded.';
-  setTimeout(function () { progressEl.style.display = 'none'; }, 2000);
+  stopBtn.style.display = 'none';
+  if (state.loadingAborted) {
+    progressEl.textContent = 'Stopped. ' + state.conversations.length + ' conversations loaded.';
+  } else {
+    progressEl.textContent = 'All ' + state.conversations.length + ' conversations loaded.';
+  }
+  setTimeout(function () { progressEl.style.display = 'none'; }, 3000);
 
   renderConversationTable();
   updateSelectionCount();
+}
+
+function stopLoading() {
+  state.loadingAborted = true;
+  document.getElementById('stop-loading-btn').style.display = 'none';
+  document.getElementById('conv-progress').textContent = 'Stopping...';
 }
 
 // ── renderConversationTable() ─────────────────────────
@@ -983,8 +1001,17 @@ function renderConversationTable() {
     // Date cell
     var tdDate = document.createElement('td');
     if (c.create_time) {
-      var d = new Date(c.create_time * 1000);
-      tdDate.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      var ts = typeof c.create_time === 'string' ? parseFloat(c.create_time) : c.create_time;
+      var d = new Date(ts * 1000);
+      if (!isNaN(d.getTime())) {
+        tdDate.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+    } else if (c.update_time) {
+      var ts2 = typeof c.update_time === 'string' ? parseFloat(c.update_time) : c.update_time;
+      var d2 = new Date(ts2 * 1000);
+      if (!isNaN(d2.getTime())) {
+        tdDate.textContent = d2.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      }
     }
 
     tr.appendChild(tdCb);
