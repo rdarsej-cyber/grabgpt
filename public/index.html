@@ -870,22 +870,195 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-// ── Stub functions (replaced in later tasks) ──────────
-function loadConversations() {}
-function renderConversationTable() {}
-function selectAll() {}
-function deselectAll() {}
-function updateSelectionCount() {}
-function setFormat() {}
+// ── escapeHtml(str) ───────────────────────────────────
+function escapeHtml(s) {
+  if (typeof s !== 'string') return '';
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── loadConversations() ───────────────────────────────
+async function loadConversations() {
+  state.conversations = [];
+  state.selected = new Set();
+
+  var progressEl = document.getElementById('conv-progress');
+  var controlsEl = document.getElementById('conv-controls');
+
+  progressEl.textContent = 'Loading conversations...';
+  progressEl.style.display = 'block';
+  controlsEl.style.display = 'none';
+
+  var offset = 0;
+  var limit  = 28;
+
+  try {
+    while (true) {
+      var result = await apiCall('/conversations?offset=' + offset + '&limit=' + limit + '&order=updated');
+
+      if (result.status === 401 || result.status === 403) {
+        progressEl.textContent = 'Auth expired. Please go back and reconnect.';
+        return;
+      }
+
+      var items = (result.data && result.data.items) ? result.data.items : [];
+      if (items.length === 0) break;
+
+      state.conversations = state.conversations.concat(items);
+      progressEl.textContent = 'Loading conversations... ' + state.conversations.length + ' loaded';
+
+      if (items.length < limit) break;
+
+      offset += limit;
+
+      // 1 second delay to avoid rate limits
+      await new Promise(function (resolve) { setTimeout(resolve, 1000); });
+    }
+  } catch (err) {
+    progressEl.textContent = 'Error loading conversations: ' + (err.message || 'Unknown error');
+    if (state.conversations.length === 0) return;
+    // Fall through to show whatever was loaded
+  }
+
+  progressEl.style.display = 'none';
+  controlsEl.style.display = 'flex';
+
+  // Select all conversations by default
+  state.conversations.forEach(function (c) { state.selected.add(c.id); });
+
+  renderConversationTable();
+  updateSelectionCount();
+}
+
+// ── renderConversationTable() ─────────────────────────
+function renderConversationTable() {
+  var searchEl = document.getElementById('conv-search');
+  var tbody    = document.getElementById('conv-list');
+  var query    = searchEl ? searchEl.value.toLowerCase() : '';
+
+  var filtered = state.conversations.filter(function (c) {
+    return (c.title || '').toLowerCase().indexOf(query) !== -1;
+  });
+
+  // Build rows using DOM methods (no innerHTML) to avoid XSS
+  var fragment = document.createDocumentFragment();
+  filtered.forEach(function (c) {
+    var tr = document.createElement('tr');
+
+    // Checkbox cell
+    var tdCb = document.createElement('td');
+    var cb   = document.createElement('input');
+    cb.type       = 'checkbox';
+    cb.dataset.id = c.id;
+    cb.checked    = state.selected.has(c.id);
+    cb.addEventListener('change', function () { toggleConv(cb); });
+    tdCb.appendChild(cb);
+
+    // Title cell
+    var tdTitle = document.createElement('td');
+    tdTitle.textContent = c.title || '(Untitled)';
+
+    // Date cell
+    var tdDate = document.createElement('td');
+    if (c.create_time) {
+      var d = new Date(c.create_time * 1000);
+      tdDate.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    tr.appendChild(tdCb);
+    tr.appendChild(tdTitle);
+    tr.appendChild(tdDate);
+    fragment.appendChild(tr);
+  });
+
+  // Clear and repopulate using safe DOM methods
+  while (tbody.firstChild) { tbody.removeChild(tbody.firstChild); }
+  tbody.appendChild(fragment);
+
+  // Sync the select-all header checkbox
+  var allCheckbox = document.getElementById('select-all-checkbox');
+  if (allCheckbox) {
+    allCheckbox.checked = filtered.length > 0 &&
+      filtered.every(function (c) { return state.selected.has(c.id); });
+    allCheckbox.indeterminate = !allCheckbox.checked &&
+      filtered.some(function (c) { return state.selected.has(c.id); });
+  }
+}
+
+// ── toggleConv(el) ────────────────────────────────────
+function toggleConv(el) {
+  var id = el.dataset.id;
+  if (el.checked) {
+    state.selected.add(id);
+  } else {
+    state.selected.delete(id);
+  }
+  updateSelectionCount();
+
+  // Sync header checkbox
+  var searchEl = document.getElementById('conv-search');
+  var query    = searchEl ? searchEl.value.toLowerCase() : '';
+  var filtered = state.conversations.filter(function (c) {
+    return (c.title || '').toLowerCase().indexOf(query) !== -1;
+  });
+  var allCheckbox = document.getElementById('select-all-checkbox');
+  if (allCheckbox) {
+    allCheckbox.checked = filtered.length > 0 &&
+      filtered.every(function (c) { return state.selected.has(c.id); });
+    allCheckbox.indeterminate = !allCheckbox.checked &&
+      filtered.some(function (c) { return state.selected.has(c.id); });
+  }
+}
+
+// ── selectAll() ───────────────────────────────────────
+function selectAll() {
+  var searchEl = document.getElementById('conv-search');
+  var query    = searchEl ? searchEl.value.toLowerCase() : '';
+  state.conversations
+    .filter(function (c) { return (c.title || '').toLowerCase().indexOf(query) !== -1; })
+    .forEach(function (c) { state.selected.add(c.id); });
+  renderConversationTable();
+  updateSelectionCount();
+}
+
+// ── deselectAll() ─────────────────────────────────────
+function deselectAll() {
+  var searchEl = document.getElementById('conv-search');
+  var query    = searchEl ? searchEl.value.toLowerCase() : '';
+  state.conversations
+    .filter(function (c) { return (c.title || '').toLowerCase().indexOf(query) !== -1; })
+    .forEach(function (c) { state.selected.delete(c.id); });
+  renderConversationTable();
+  updateSelectionCount();
+}
+
+// ── updateSelectionCount() ────────────────────────────
+function updateSelectionCount() {
+  var countEl   = document.getElementById('selection-count');
+  var exportBtn = document.getElementById('export-btn');
+  var total     = state.conversations.length;
+  var selected  = state.selected.size;
+
+  if (countEl)   countEl.textContent = selected + ' of ' + total + ' selected';
+  if (exportBtn) exportBtn.disabled  = selected === 0;
+}
+
+// ── setFormat(format) ─────────────────────────────────
+function setFormat(format) {
+  state.format = format;
+  document.querySelectorAll('.format-btn').forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.format === format);
+  });
+}
+
+// ── Stub functions (to be implemented in later tasks) ──
 function startExport() {}
 function abortExport() {}
 function downloadZip() {}
 function startOver() {}
-function escapeHtml(s) {
-  if (typeof s !== 'string') return '';
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function toggleConv() {}
 </script>
 </body>
 </html>
