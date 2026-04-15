@@ -379,6 +379,7 @@
       </div>
 
       <div id="panel-windows" class="tab-panel">
+        <p style="color:#888;font-size:14px;margin:8px 0 4px 4px;">Run this in PowerShell as Administrator:</p>
         <div class="code-block" style="border-top: none; border-radius: 0 0 10px 10px;">
           <code id="code-windows">irm grabgpt.darsej.com/install.ps1 | iex</code>
           <button class="copy-btn" onclick="copyCode('code-windows', this)">Copy</button>
@@ -386,6 +387,7 @@
       </div>
 
       <div id="panel-linux" class="tab-panel">
+        <p style="color:#888;font-size:14px;margin:8px 0 4px 4px;">Run this in your terminal:</p>
         <div class="code-block" style="border-top: none; border-radius: 0 0 10px 10px;">
           <code id="code-linux">curl -fsSL grabgpt.darsej.com/install.sh | sh</code>
           <button class="copy-btn" onclick="copyCode('code-linux', this)">Copy</button>
@@ -407,9 +409,9 @@
     <div class="container">
       <p class="section-label">See it in action</p>
       <h2 class="section-title">Export your conversations in seconds</h2>
-      <div style="max-width:1200px;margin:0 auto;position:relative;left:50%;transform:translateX(-50%);width:1200px;">
+      <div style="max-width:1100px;margin:0 auto;width:calc(100% - 16px);box-sizing:border-box;">
         <video autoplay loop muted playsinline style="width:100%;border-radius:12px;border:1px solid #333;">
-          <source src="/demo.mp4" type="video/mp4">
+          <source src="/demo.mp4?v=10" type="video/mp4">
         </video>
       </div>
     </div>
